@@ -22,7 +22,7 @@ class Generator(nn.Module):
     def __init__(self, input_nc, output_nc, n_residual_blocks=9):
         super(Generator, self).__init__()
 
-        # Initial convolution block       
+        # Initial convolution block
         model = [   nn.ReflectionPad2d(3),
                     nn.Conv2d(input_nc, 64, 7),
                     nn.InstanceNorm2d(64),
@@ -70,15 +70,15 @@ class Discriminator(nn.Module):
                     nn.LeakyReLU(0.2, inplace=True) ]
 
         model += [  nn.Conv2d(64, 128, 4, stride=2, padding=1),
-                    nn.InstanceNorm2d(128), 
+                    nn.InstanceNorm2d(128),
                     nn.LeakyReLU(0.2, inplace=True) ]
 
         model += [  nn.Conv2d(128, 256, 4, stride=2, padding=1),
-                    nn.InstanceNorm2d(256), 
+                    nn.InstanceNorm2d(256),
                     nn.LeakyReLU(0.2, inplace=True) ]
 
         model += [  nn.Conv2d(256, 512, 4, padding=1),
-                    nn.InstanceNorm2d(512), 
+                    nn.InstanceNorm2d(512),
                     nn.LeakyReLU(0.2, inplace=True) ]
 
         # FCN classification layer
@@ -89,4 +89,5 @@ class Discriminator(nn.Module):
     def forward(self, x):
         x =  self.model(x)
         # Average pooling and flatten
-        return F.avg_pool2d(x, x.size()[2:]).view(x.size()[0], -1)
+        z = F.avg_pool2d(x, x.size()[2:]).view(x.size()[0], -1)
+        return z.squeeze(dim=1)
