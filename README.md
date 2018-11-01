@@ -1,6 +1,12 @@
 # Pytorch-CycleGAN
 A clean and readable Pytorch implementation of CycleGAN (https://arxiv.org/abs/1703.10593)
 
+
+- iRevNet:https://github.com/jhjacobsen/pytorch-i-revnet
+- Glow: https://github.com/chaiyujin/glow-pytorch, https://github.com/musyoku/chainer-glow
+- RealNVP: https://github.com/ars-ashuha/real-nvp-pytorch
+
+
 ## Prerequisites
 Code is intended to work with ```Python 3.6.x```, it hasn't been tested with previous versions
 
