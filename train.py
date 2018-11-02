@@ -7,8 +7,8 @@ from torch.autograd import Variable
 from PIL import Image
 import torch
 
-from models import Generator
-from models import Discriminator
+from models import CycleConsistentGenerator, Discriminator
+from glow import Glow
 from utils import ReplayBuffer
 from utils import LambdaLR
 from utils import Logger
@@ -35,19 +35,16 @@ if torch.cuda.is_available() and not opt.cuda:
 
 ###### Definition of variables ######
 # Networks
-netG_A2B = Generator(opt.input_nc, opt.output_nc)
-netG_B2A = Generator(opt.output_nc, opt.input_nc)
+generator = CycleConsistentGenerator(opt.input_nc, opt.output_nc)
 netD_A = Discriminator(opt.input_nc)
 netD_B = Discriminator(opt.output_nc)
 
 if opt.cuda:
-    netG_A2B.cuda()
-    netG_B2A.cuda()
+    generator.cuda()
     netD_A.cuda()
     netD_B.cuda()
 
-netG_A2B.apply(weights_init_normal)
-netG_B2A.apply(weights_init_normal)
+generator.apply(weights_init_normal)
 netD_A.apply(weights_init_normal)
 netD_B.apply(weights_init_normal)
 
@@ -57,7 +54,7 @@ criterion_cycle = torch.nn.L1Loss()
 criterion_identity = torch.nn.L1Loss()
 
 # Optimizers & LR schedulers
-optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),
+optimizer_G = torch.optim.Adam(itertools.chain(generator.parameters()),
                                 lr=opt.lr, betas=(0.5, 0.999))
 optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=opt.lr, betas=(0.5, 0.999))
 optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=opt.lr, betas=(0.5, 0.999))
@@ -86,7 +83,7 @@ dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_, unal
                         batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu)
 
 # Loss plot
-logger = Logger(opt.n_epochs, len(dataloader))
+# logger = Logger(opt.n_epochs, len(dataloader))
 ###################################
 
 ###### Training ######
@@ -101,26 +98,26 @@ for epoch in range(opt.epoch, opt.n_epochs):
 
         # Identity loss
         # G_A2B(B) should equal B if real B is fed
-        same_B = netG_A2B(real_B)
+        same_B = generator.transform(real_B)
         loss_identity_B = criterion_identity(same_B, real_B)*5.0
         # G_B2A(A) should equal A if real A is fed
-        same_A = netG_B2A(real_A)
+        same_A = generator.transform.inv(real_A)
         loss_identity_A = criterion_identity(same_A, real_A)*5.0
 
         # GAN loss
-        fake_B = netG_A2B(real_A)
+        fake_B = generator.transform(real_A)
         pred_fake = netD_B(fake_B)
         loss_GAN_A2B = criterion_GAN(pred_fake, target_real)
 
-        fake_A = netG_B2A(real_B)
+        fake_A = generator.transform.inv(real_B)
         pred_fake = netD_A(fake_A)
         loss_GAN_B2A = criterion_GAN(pred_fake, target_real)
 
         # Cycle loss
-        recovered_A = netG_B2A(fake_B)
+        recovered_A = generator.transform.inv(fake_B)
         loss_cycle_ABA = criterion_cycle(recovered_A, real_A)*10.0
 
-        recovered_B = netG_A2B(fake_A)
+        recovered_B = generator.transform(fake_A)
         loss_cycle_BAB = criterion_cycle(recovered_B, real_B)*10.0
 
         # Total loss
@@ -169,9 +166,9 @@ for epoch in range(opt.epoch, opt.n_epochs):
         ###################################
 
         # Progress report (http://localhost:8097)
-        logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-                    'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
-                    images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
+        # logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
+        #             'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
+        #             images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
 
     # Update learning rates
     lr_scheduler_G.step()
@@ -179,8 +176,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
     lr_scheduler_D_B.step()
 
     # Save models checkpoints
-    torch.save(netG_A2B.state_dict(), 'output/netG_A2B.pth')
-    torch.save(netG_B2A.state_dict(), 'output/netG_B2A.pth')
+    torch.save(generator.state_dict(), 'output/generator.pth')
     torch.save(netD_A.state_dict(), 'output/netD_A.pth')
     torch.save(netD_B.state_dict(), 'output/netD_B.pth')
 ###################################

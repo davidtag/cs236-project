@@ -1,6 +1,32 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+from torch.distributions.transforms import Transform
+
+class CycleConsistentTransform(Transform):
+    bijective = False
+    def __init__(self, f, i):
+        super(CycleConsistentTransform, self).__init__()
+        self.f = f
+        self.i = i
+
+    def _call(self, x):
+        return self.f(x)
+
+    def _inverse(self, x):
+        return self.i(x)
+
+
+class CycleConsistentGenerator(nn.Module):
+    def __init__(self, a_nc, b_nc, g_n_residual_blocks=9):
+        super(CycleConsistentGenerator, self).__init__()
+        self.netG_A2B = Generator(a_nc, b_nc, g_n_residual_blocks)
+        self.g_backward = Generator(b_nc, a_nc, g_n_residual_blocks)
+
+        self.transform = CycleConsistentTransform(self.netG_A2B,
+                                                  self.g_backward)
+
+
 class ResidualBlock(nn.Module):
     def __init__(self, in_features):
         super(ResidualBlock, self).__init__()
