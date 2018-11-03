@@ -3,10 +3,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions.transforms import Transform, ComposeTransform
+from torch.distributions import transforms
 
 
-class Squeeze(Transform):
+class Squeeze(transforms.Transform):
     bijective = True
     event_dim = 3
     def __init__(self, factor):
@@ -46,7 +46,7 @@ class Squeeze(Transform):
 
 
 
-class InvertibleConv1x1(Transform):
+class InvertibleConv1x1(transforms.Transform):
     bijective = True
     event_dim = 3
     def __init__(self, module):
@@ -71,7 +71,7 @@ def split_half(x):
     return x[:, :s, ...], x[:, s:, ...]
 
 
-class ChannelCoupling(Transform):
+class ChannelCoupling(transforms.Transform):
     bijective = True
     event_dim = 3
 
@@ -123,13 +123,20 @@ class InvertibleConv1x1Matrix(nn.Module):
         self._c = c
         w_init = np.linalg.qr(
             np.random.randn(self._c, self._c))[0].astype(np.float32)
-        self.W = nn.Parameter(torch.Tensor(w_init))
+        self.weight = nn.Parameter(torch.Tensor(w_init))
 
     def forward_kernel(self):
-        return self.W.view((self._c, self._c, 1, 1))
+        return self.weight.view((self._c, self._c, 1, 1))
 
     def inverse_kernel(self):
-        return self.W.inverse().view((self._c, self._c, 1, 1))
+        return self.weight.inverse().view((self._c, self._c, 1, 1))
+
+
+def TanhTransform():
+    return transforms.ComposeTransform(
+        [transforms.AffineTransform(loc=0., scale=2.),
+         transforms.SigmoidTransform(),
+         transforms.AffineTransform(loc=-1., scale=2.)])
 
 
 class Glow(nn.Module):
@@ -139,23 +146,29 @@ class Glow(nn.Module):
         self._n_conv1x1 = 0
         self._n, self._c, self._h = n, c, h
 
-        transforms = []
+        t = []
         if squeeze_factor > 1:
-            transforms.append(Squeeze(squeeze_factor))
+            t.append(Squeeze(squeeze_factor))
             self._c = self._c * (squeeze_factor ** 2)
+        # t.append(TanhTransform().inv)
         for _ in range(self._n):
-            transforms.extend([
+            t.extend([
                 InvertibleConv1x1(self._conv1x1_network()),
                 ChannelCoupling(self._coupling_network())
             ])
-        self.transform = ComposeTransform(transforms)
+        if squeeze_factor > 1:
+            t.append(Squeeze(squeeze_factor).inv)
+        # t.append(TanhTransform())
+        self.transform = transforms.ComposeTransform(t)
 
     def _coupling_network(self):
         c, h = self._c, self._h
         module = nn.Sequential(
             _conv(c//2, h, kernel_size=3),
+            nn.InstanceNorm2d(h),
             nn.ReLU(inplace=False),
             _conv(h, h, kernel_size=1),
+            nn.InstanceNorm2d(h),
             nn.ReLU(inplace=False),
             _conv(h, c, kernel_size=3, zero=True),
         )
@@ -170,11 +183,33 @@ class Glow(nn.Module):
         return module
 
 
-if __name__ == "__main__":
-    x = torch.rand((32, 3, 32, 32))
 
-    glow = Glow(10, 3, 64)
-    z = glow.transform(x)
-    x2 = glow.transform.inv(z)
-    print(torch.sum(x - x2))
-    print(list(glow.children()))
+if __name__ == "__main__":
+
+    import torchvision.transforms as img_transforms
+    from torch.utils.data import DataLoader
+    from PIL import Image
+    from datasets import ImageDataset
+
+    x = torch.rand((1, 3, 256, 256)) * 2 - 1
+    # # print(x)
+    transforms_ = [ img_transforms.Resize(int(256*1.12), Image.BICUBIC),
+                    img_transforms.RandomCrop(256),
+                    img_transforms.RandomHorizontalFlip(),
+                    img_transforms.ToTensor(),
+                    img_transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ]
+    dataloader = DataLoader(ImageDataset('datasets/facades',
+                                         transforms_=transforms_, unaligned=True),
+                            batch_size=1, shuffle=True, num_workers=0)
+
+    glow = Glow(1, 3, 256, squeeze_factor=4)
+    transform = glow.transform
+    for d in dataloader:
+        x = d['A']
+        z = transform(x)
+        print(torch.max(z))
+        # z = torch.max(z, torch.Tensor(np.array(0.99)))
+        # z = torch.min(z, torch.Tensor(np.array(-0.99)))
+        x2 = transform.inv(z)
+        print(torch.sum(x - x2))
+        break
