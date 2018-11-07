@@ -121,9 +121,10 @@ class InvertibleConv1x1Matrix(nn.Module):
     def __init__(self, c):
         super(InvertibleConv1x1Matrix, self).__init__()
         self._c = c
-        w_init = np.linalg.qr(
-            np.random.randn(self._c, self._c))[0].astype(np.float32)
-        self.weight = nn.Parameter(torch.Tensor(w_init))
+        self.w_init = torch.Tensor(np.random.randn(self._c, self._c)).qr()[0]
+        # w_init = np.linalg.qr(
+        #     np.random.randn(self._c, self._c))[0].astype(np.float32)
+        self.weight = nn.Parameter(self.w_init)
 
     def forward_kernel(self):
         return self.weight.view((self._c, self._c, 1, 1))
@@ -140,37 +141,39 @@ def TanhTransform():
 
 
 class Glow(nn.Module):
-    def __init__(self, n, c, h, squeeze_factor=2):
+    def __init__(self, n, c, h, squeeze):
         super(Glow, self).__init__()
         self._n_couple = 0
         self._n_conv1x1 = 0
         self._n, self._c, self._h = n, c, h
 
         t = []
-        if squeeze_factor > 1:
-            t.append(Squeeze(squeeze_factor))
-            self._c = self._c * (squeeze_factor ** 2)
-        # t.append(TanhTransform().inv)
+        t.append(TanhTransform().inv)
+        if squeeze > 1:
+            t.append(Squeeze(squeeze))
+            self._c = self._c * (squeeze ** 2)
         for _ in range(self._n):
             t.extend([
                 InvertibleConv1x1(self._conv1x1_network()),
                 ChannelCoupling(self._coupling_network())
             ])
-        if squeeze_factor > 1:
-            t.append(Squeeze(squeeze_factor).inv)
-        # t.append(TanhTransform())
+        t.append(InvertibleConv1x1(self._conv1x1_network()))
+        if squeeze > 1:
+            t.append(Squeeze(squeeze).inv)
+            self._c = self._c // (squeeze ** 2)
+        t.append(TanhTransform())
         self.transform = transforms.ComposeTransform(t)
 
     def _coupling_network(self):
         c, h = self._c, self._h
         module = nn.Sequential(
-            _conv(c//2, h, kernel_size=3),
+            _conv(c//2, h, kernel_size=7),
             nn.InstanceNorm2d(h),
             nn.ReLU(inplace=False),
-            _conv(h, h, kernel_size=1),
+            _conv(h, h, kernel_size=3),
             nn.InstanceNorm2d(h),
             nn.ReLU(inplace=False),
-            _conv(h, c, kernel_size=3, zero=True),
+            _conv(h, c, kernel_size=7, zero=True),
         )
         self.add_module("couple_{}".format(self._n_couple), module)
         self._n_couple += 1
@@ -186,30 +189,43 @@ class Glow(nn.Module):
 
 if __name__ == "__main__":
 
+    loss = torch.nn.L1Loss()
+
+    # x = torch.rand((1, 3, 256, 256)) * 2 - 1
+    glow = Glow(32, 3, 16, squeeze=4)
+
+    if torch.cuda.is_available():
+        print("cuda is available")
+        glow.cuda()
+    else:
+        print("cuda is not available")
+
+    transform = glow.transform
+    # z = transform(x)
+    # x2 = transform.inv(z)
+    # print(loss(x, x2))
+
     import torchvision.transforms as img_transforms
     from torch.utils.data import DataLoader
     from PIL import Image
     from datasets import ImageDataset
 
-    x = torch.rand((1, 3, 256, 256)) * 2 - 1
-    # # print(x)
     transforms_ = [ img_transforms.Resize(int(256*1.12), Image.BICUBIC),
                     img_transforms.RandomCrop(256),
                     img_transforms.RandomHorizontalFlip(),
                     img_transforms.ToTensor(),
                     img_transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ]
-    dataloader = DataLoader(ImageDataset('datasets/facades',
-                                         transforms_=transforms_, unaligned=True),
-                            batch_size=1, shuffle=True, num_workers=0)
 
-    glow = Glow(1, 3, 256, squeeze_factor=4)
-    transform = glow.transform
+    dataloader = DataLoader(
+        ImageDataset('datasets/facades',
+                     transforms_=transforms_, unaligned=True),
+        batch_size=1, shuffle=False, num_workers=0)
+
     for d in dataloader:
-        x = d['A']
-        z = transform(x)
-        print(torch.max(z))
+        x = d['A'] * 0.99
+        z = transform(x) * 0.99
         # z = torch.max(z, torch.Tensor(np.array(0.99)))
         # z = torch.min(z, torch.Tensor(np.array(-0.99)))
         x2 = transform.inv(z)
-        print(torch.sum(x - x2))
+        print(loss(x, x2))
         break
