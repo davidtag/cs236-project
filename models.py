@@ -3,6 +3,31 @@ import torch.nn.functional as F
 
 from torch.distributions.transforms import Transform
 
+from iRevNet import *
+
+######################################################################################
+class iRevNetCycle(nn.Module):
+    def __init__(self,in_shape=[3, 224, 224]):
+        super(iRevNetCycle,self).__init__()
+        self.model = iRevNet(nBlocks=[6, 16, 72, 6], nStrides=[2,2,2,2],
+                             nChannels=[24,96,384,1536], nClasses=1000, init_ds=2,
+                             dropout_rate=0., affineBN=True, in_shape=in_shape,
+                             mult=4)
+        self.transform = CycleConsistentTransform(self.model.forward,
+                                                 self.model.inverse)
+
+######################################################################################        
+class CycleConsistentGenerator(nn.Module):
+    def __init__(self, a_nc, b_nc, g_n_residual_blocks=9):
+        super(CycleConsistentGenerator, self).__init__()
+        self.netG_A2B = Generator(a_nc, b_nc, g_n_residual_blocks)
+        self.g_backward = Generator(b_nc, a_nc, g_n_residual_blocks)
+
+        self.transform = CycleConsistentTransform(self.netG_A2B,
+                                                  self.g_backward)
+        
+        
+######################################################################################        
 class CycleConsistentTransform(Transform):
     bijective = False
     def __init__(self, f, i):
@@ -14,19 +39,9 @@ class CycleConsistentTransform(Transform):
         return self.f(x)
 
     def _inverse(self, x):
-        return self.i(x)
-
-
-class CycleConsistentGenerator(nn.Module):
-    def __init__(self, a_nc, b_nc, g_n_residual_blocks=9):
-        super(CycleConsistentGenerator, self).__init__()
-        self.netG_A2B = Generator(a_nc, b_nc, g_n_residual_blocks)
-        self.g_backward = Generator(b_nc, a_nc, g_n_residual_blocks)
-
-        self.transform = CycleConsistentTransform(self.netG_A2B,
-                                                  self.g_backward)
-
-
+        return self.i(x) 
+    
+######################################################################################        
 class ResidualBlock(nn.Module):
     def __init__(self, in_features):
         super(ResidualBlock, self).__init__()

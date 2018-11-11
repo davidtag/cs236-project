@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.distributions import transforms
 
 
+##############################################################################################
 class Squeeze(transforms.Transform):
     bijective = True
     event_dim = 3
@@ -139,7 +140,7 @@ def TanhTransform():
          transforms.SigmoidTransform(),
          transforms.AffineTransform(loc=-1., scale=2.)])
 
-
+##############################################################################################
 class Glow(nn.Module):
     def __init__(self, n, c, h, squeeze):
         super(Glow, self).__init__()
@@ -186,7 +187,55 @@ class Glow(nn.Module):
         return module
 
 
+		
+##############################################################################################		
+class RealNVP(nn.Module):
+    def __init__(self, n, c, h, squeeze):
+        super(RealNVP, self).__init__()
+        self._n_couple = 0
+        self._n_conv1x1 = 0
+        self._n, self._c, self._h = n, c, h
 
+        t = []
+        t.append(TanhTransform().inv)
+        if squeeze > 1:
+            t.append(Squeeze(squeeze))
+            self._c = self._c * (squeeze ** 2)
+        for _ in range(self._n):
+            t.extend([
+                InvertibleConv1x1(self._conv1x1_network()),
+                ChannelCoupling(self._coupling_network())
+            ])
+        t.append(InvertibleConv1x1(self._conv1x1_network()))
+        if squeeze > 1:
+            t.append(Squeeze(squeeze).inv)
+            self._c = self._c // (squeeze ** 2)
+        t.append(TanhTransform())
+        self.transform = transforms.ComposeTransform(t)
+
+    def _coupling_network(self):
+        c, h = self._c, self._h
+        module = nn.Sequential(
+            _conv(c//2, h, kernel_size=7),
+            nn.InstanceNorm2d(h),
+            nn.ReLU(inplace=False),
+            _conv(h, h, kernel_size=3),
+            nn.InstanceNorm2d(h),
+            nn.ReLU(inplace=False),
+            _conv(h, c, kernel_size=7, zero=True),
+        )
+        self.add_module("couple_{}".format(self._n_couple), module)
+        self._n_couple += 1
+        return module
+
+    def _conv1x1_network(self):
+        module = InvertibleConv1x1Matrix(self._c)
+        self.add_module("conv1x1_{}".format(self._n_conv1x1), module)
+        self._n_conv1x1 += 1
+        return module
+		
+		
+##############################################################################################
 if __name__ == "__main__":
 
     loss = torch.nn.L1Loss()
