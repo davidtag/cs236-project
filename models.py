@@ -14,7 +14,7 @@ class iRevNetCycle(nn.Module):
                              dropout_rate=0., affineBN=True, in_shape=in_shape,
                              mult=4)
         self.transform = CycleConsistentTransform(self.model.forward,
-                                                 self.model.inverse)
+                                                  self.model.inverse)
 
 ######################################################################################        
 class CycleConsistentGenerator(nn.Module):
@@ -102,6 +102,8 @@ class Generator(nn.Module):
     def forward(self, x):
         return self.model(x)
 
+    
+######################################################################################
 class Discriminator(nn.Module):
     def __init__(self, input_nc):
         super(Discriminator, self).__init__()

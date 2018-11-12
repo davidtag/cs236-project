@@ -9,7 +9,8 @@ from visdom import Visdom
 import numpy as np
 
 def tensor2image(tensor):
-    image = 127.5*(tensor[0].cpu().float().numpy() + 1.0)
+    image = 255*(tensor[0].cpu().float().numpy())
+    #image = 127.5*(tensor[0].cpu().float().numpy() + 1.0)
     if image.shape[0] == 1:
         image = np.tile(image, (3,1,1))
     return image.astype(np.uint8)
