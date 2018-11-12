@@ -1,9 +1,12 @@
 if __name__ == '__main__':
+    print("---starting")
+    import pdb
+    #pdb.set_trace()
+
     import argparse
     import itertools
 
     import numpy as np
-    import pdb
     
     import torchvision.transforms as transforms
     from torch.utils.data import DataLoader
@@ -79,7 +82,7 @@ if __name__ == '__main__':
 
     # Optimizers & LR schedulers
     optimizer_G = torch.optim.Adam(generator.parameters(),
-                                   lr=opt.g_lr, #betas=(0.5, 0.999),
+                                   lr=opt.g_lr, betas=(0.5, 0.999),
                                    weight_decay=1e-3)
     optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=opt.d_lr, betas=(0.5, 0.999))
     optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=opt.d_lr, betas=(0.5, 0.999))
@@ -153,35 +156,39 @@ if __name__ == '__main__':
 
                 # Identity loss
                 # G_A2B(B) should equal B if real B is fed
-                same_B = generator.transform(real_B)
-                loss_identity_B = criterion_identity(same_B, real_B) * opt.identity_weight
+                ####same_B = generator.transform(real_B)
+                ####loss_identity_B = criterion_identity(same_B, real_B) * opt.identity_weight
                 # G_B2A(A) should equal A if real A is fed
-                same_A = generator.transform.inv(real_A)
-                loss_identity_A = criterion_identity(same_A, real_A) * opt.identity_weight
+                ####same_A = generator.transform.inv(real_A)
+                ####loss_identity_A = criterion_identity(same_A, real_A) * opt.identity_weight
+
 
                 # GAN loss
-                fake_B = generator.transform(real_A)
-                pred_fake = netD_B(fake_B)
-                loss_GAN_A2B = criterion_GAN(pred_fake, target_real)
+                ####fake_B = generator.transform(real_A)
+                ####pred_fake = netD_B(fake_B)
+                ####loss_GAN_A2B = criterion_GAN(pred_fake, target_real)
 
                 fake_A = generator.transform.inv(real_B)
                 pred_fake = netD_A(fake_A)
                 loss_GAN_B2A = criterion_GAN(pred_fake, target_real)
 
+
                 # Cycle loss
                 #print("Fake B diff: ", ((fake_B-fake_B_ok)**2).sum())
-                recovered_A = generator.transform.inv(fake_B)
+                ####recovered_A = generator.transform.inv(fake_B)
                 #print("Rec A diff: ", ((recovered_A-recovered_A_ok)**2).sum())
-                loss_cycle_ABA = criterion_cycle(recovered_A, real_A) * opt.cycle_weight
+                ####loss_cycle_ABA = criterion_cycle(recovered_A, real_A) * opt.cycle_weight
                 #print(loss_cycle_ABA)                
 
-                recovered_B = generator.transform(fake_A)
-                loss_cycle_BAB = criterion_cycle(recovered_B, real_B)  * opt.cycle_weight
+                ####recovered_B = generator.transform(fake_A)
+                ####loss_cycle_BAB = criterion_cycle(recovered_B, real_B)  * opt.cycle_weight
                 #cycle_loss = loss_cycle_ABA + loss_cycle_BAB
                 #print(loss_cycle_BAB) 
 
+
                 # Total loss
-                loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+                ####loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+                loss_G = loss_GAN_B2A ####loss_GAN_A2B + loss_GAN_B2A
                 loss_G.backward()
 
                 if opt.g_clip_grad > 0.:
@@ -191,68 +198,73 @@ if __name__ == '__main__':
                 ###################################
 
                 ###### Discriminator A ######
-                optimizer_D_A.zero_grad()
+                if True:
+                    optimizer_D_A.zero_grad()
 
-                # Real loss
-                pred_real = netD_A(real_A).view(target_real.shape)
-                loss_D_real = criterion_GAN(pred_real, target_real)
+                    # Real loss
+                    pred_real = netD_A(real_A).view(target_real.shape)
+                    loss_D_real = criterion_GAN(pred_real, target_real)
 
-                # Fake loss
-                fake_A = fake_A_buffer.push_and_pop(fake_A)
-                pred_fake = netD_A(fake_A.detach())
-                loss_D_fake = criterion_GAN(pred_fake, target_fake)
+                    # Fake loss
+                    fake_A = fake_A_buffer.push_and_pop(fake_A)
+                    pred_fake = netD_A(fake_A.detach())
+                    loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
-                # Total loss
-                loss_D_A = (loss_D_real + loss_D_fake)*0.5
-                loss_D_A.backward()
+                    # Total loss
+                    loss_D_A = (loss_D_real + loss_D_fake)*0.5
+                    loss_D_A.backward()
 
-                if opt.d_clip_grad > 0.:
-                    torch.nn.utils.clip_grad_norm_(netD_A.parameters(), opt.d_clip_grad)
-                optimizer_D_A.step()
+                    if opt.d_clip_grad > 0.:
+                        torch.nn.utils.clip_grad_norm_(netD_A.parameters(), opt.d_clip_grad)
+                    optimizer_D_A.step()
                 ###################################
 
                 ###### Discriminator B ######
-                optimizer_D_B.zero_grad()
+                if False:
+                    optimizer_D_B.zero_grad()
 
-                # Real loss
-                pred_real = netD_B(real_B)
-                loss_D_real = criterion_GAN(pred_real, target_real)
+                    # Real loss
+                    pred_real = netD_B(real_B)
+                    loss_D_real = criterion_GAN(pred_real, target_real)
 
-                # Fake loss
-                fake_B = fake_B_buffer.push_and_pop(fake_B)
-                pred_fake = netD_B(fake_B.detach())
-                loss_D_fake = criterion_GAN(pred_fake, target_fake)
+                    # Fake loss
+                    fake_B = fake_B_buffer.push_and_pop(fake_B)
+                    pred_fake = netD_B(fake_B.detach())
+                    loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
-                # Total loss
-                loss_D_B = (loss_D_real + loss_D_fake)*0.5
-                loss_D_B.backward()
+                    # Total loss
+                    loss_D_B = (loss_D_real + loss_D_fake)*0.5
+                    loss_D_B.backward()
 
-                if opt.d_clip_grad > 0.:
-                    torch.nn.utils.clip_grad_norm_(netD_B.parameters(), opt.d_clip_grad)
-                optimizer_D_B.step()
+                    if opt.d_clip_grad > 0.:
+                        torch.nn.utils.clip_grad_norm_(netD_B.parameters(), opt.d_clip_grad)
+                    optimizer_D_B.step()
                 ###################################
 
                 # Progress report (http://localhost:8097)
-                print("\n------done batch")
-                if True: #i % 10 == 0:
+                #print("\n------done batch")
+                if i % 10 == 0:
                     print(loss_G)
-                    logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-                                'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 
-                                'loss_D': (loss_D_A + loss_D_B)},
-                                images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
+                    logger.log({'loss_G': loss_G, 
+                                #'loss_G_identity': (loss_identity_A + loss_identity_B),
+                                #'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
+                                #'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 
+                                'loss_D': loss_D_A}, #(loss_D_A + loss_D_B)},
+                                images={'real_A': real_A, 'real_B': real_B,})# 'fake_A': fake_A, 'fake_B': fake_B})
 
+                #print("\n------done batch end")
             # Update learning rates
             lr_scheduler_G.step()
             lr_scheduler_D_A.step()
             lr_scheduler_D_B.step()
-            print("saving models")
+            print("saving models--1")
             torch.save(generator.state_dict(), 'output/generator.pth')
             torch.save(netD_A.state_dict(), 'output/netD_A.pth')
             torch.save(netD_B.state_dict(), 'output/netD_B.pth')
 
     finally:
         # Save models checkpoints
-        print("saving models")
+        print("saving models--2")
         torch.save(generator.state_dict(), 'output/generator_final.pth')
         torch.save(netD_A.state_dict(), 'output/netD_A_final.pth')
         torch.save(netD_B.state_dict(), 'output/netD_B_final.pth')

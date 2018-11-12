@@ -207,7 +207,8 @@ if __name__ == '__main__':
                     nChannels=[24,96,384,1536], nClasses=1000, init_ds=2,
                     dropout_rate=0., affineBN=True, in_shape=[3, 256, 256],
                     mult=4).to(device)
-    
+
+    model.load_state_dict(torch.load('output/generator.pth')) 
     
     ########################################################################
     #Load Images
