@@ -109,6 +109,9 @@ class iRevNet(nn.Module):
         #self.linear = nn.Linear(nChannels[-1]*2, nClasses)
         
         self.t = transforms.SigmoidTransform()
+        self.conv = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, bias=True)
+        self.conv2 = nn.Conv2d(32, 3, kernel_size=3, stride=1, padding=1, bias=True)
+        self.relu = nn.ReLU(inplace=True)
 
     def irevnet_stack(self, _block, nChannels, nBlocks, nStrides, dropout_rate,
                       affineBN, in_ch, mult):
@@ -159,10 +162,14 @@ class iRevNet(nn.Module):
         
         #pdb.set_trace()
         #########################################################
-        out = self.t(out_bij)
-        out_reshape = self.reshape(out,dims=(batch_in,channels_in,width_in,height_in),direction='forward')
+        out_reshape = self.reshape(out_bij,dims=(batch_in,channels_in,width_in,height_in),direction='forward')
+        out = out_reshape
+
+        #out = self.relu(self.conv(out))
+        #out = self.conv2(out)
+        out = self.t(out)
         
-        return out_reshape
+        return out
         
     def inverse(self, out_bij):
         """ irevnet inverse """
@@ -199,7 +206,9 @@ if __name__ == '__main__':
     
     #import pdb
     #pdb.set_trace()
-    device = torch.device('cuda')
+    #device = torch.device('cuda')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Using device", device)
     
     ########################################################################
     #Initialize Model
