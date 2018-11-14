@@ -137,7 +137,7 @@ class iRevNet(nn.Module):
         if self.init_ds != 0:
             x = self.init_psi.forward(x)
         out = (x[:, :n, :, :], x[:, n:, :, :])
-        for block in self.stack:
+        for i, block in enumerate(self.stack):
             out = block.forward(out)
         out_bij = merge(out[0], out[1])
         
@@ -160,14 +160,31 @@ class iRevNet(nn.Module):
         #pdb.set_trace()
         #########################################################
         out = self.t(out_bij)
-        out_reshape = self.reshape(out,dims=(batch_in,channels_in,width_in,height_in),direction='forward')
         
-        return out_reshape
+        #out = out_bij
+        #print(out.shape)
+        #out *= 0.0 
+        #out[:,:,:,0] = 1.0 ## Left Vertical column (4)
+        #out[:,:,:,-1] = 3.0 ## Right Vertical column (4)
+        #out[:,:,0,:] = 5.0 ## left quarter horizontal lines
+        #out[:,:,-1,:] = 9.0
+        #print(out[0,0,:,:])
+        #out = out.permute(0,2,3,1)
+        
+        
+        for i in range(5):
+            out = self.init_psi.inverse(out)
+
+        
+        #out_reshape = self.reshape(out,dims=(batch_in,channels_in,width_in,height_in),direction='forward')
+        
+        
+        return out #out_reshape
         
     def inverse(self, out_bij):
         """ irevnet inverse """
         out_bij = self.reshape(out_bij,dims=(1,3072,8,8),direction='backward')
-        out_bij = self.t.inv(out_bij*0.9999999+0.000000001)
+        #out_bij = self.t.inv(out_bij*0.9999999+0.000000001)
         ######################################
         out = split(out_bij)
         for i in range(len(self.stack)):
@@ -179,7 +196,7 @@ class iRevNet(nn.Module):
             x = out
         #return x
         ######################################
-        x = self.t(x)
+        #x = self.t(x)
         return x
     
     def reshape(self,x,dims,direction='forward'):
