@@ -19,12 +19,18 @@ class ImageDataset(Dataset):
         self.files_B = sorted(glob.glob(os.path.join(root, '%s/B' % mode) + '/*.*'))
 
     def __getitem__(self, index):
-        item_A = img2tensor(np.array(self.transform(Image.open(self.files_A[index % len(self.files_A)]))),batch_dim=False)
+        item_A = img2tensor(np.array(self.transform(\
+                                                    Image.open(self.files_A[index % len(self.files_A)]).convert('RGB')
+                                                   )),batch_dim=False)
 
         if self.unaligned:
-            item_B = img2tensor(np.array(self.transform(Image.open(self.files_B[random.randint(0, len(self.files_B) - 1)]))),batch_dim=False)
+            item_B = img2tensor(np.array(self.transform(\
+                          Image.open(self.files_B[random.randint(0, len(self.files_B) - 1)]).convert('RGB')\
+                      )),batch_dim=False)
         else:
-            item_B = img2tensor(np.array(self.transform(Image.open(self.files_B[index % len(self.files_B)]))),batch_dim=False)
+            item_B = img2tensor(np.array(self.transform(\
+                          Image.open(self.files_B[index % len(self.files_B)]).convert('RGB')\
+                      )),batch_dim=False)
 
         return {'A': item_A, 'B': item_B}
 
