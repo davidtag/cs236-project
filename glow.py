@@ -148,7 +148,7 @@ class Glow(nn.Module):
         self._n, self._c, self._h = n, c, h
 
         t = []
-        t.append(TanhTransform().inv)
+        #t.append(TanhTransform().inv)
         if squeeze > 1:
             t.append(Squeeze(squeeze))
             self._c = self._c * (squeeze ** 2)
@@ -161,7 +161,7 @@ class Glow(nn.Module):
         if squeeze > 1:
             t.append(Squeeze(squeeze).inv)
             self._c = self._c // (squeeze ** 2)
-        t.append(TanhTransform())
+        #t.append(TanhTransform())
         self.transform = transforms.ComposeTransform(t)
 
     def _coupling_network(self):
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     else:
         print("cuda is not available")
 
-    transform = glow.transform
+    transform = glow.transform.inv
     # z = transform(x)
     # x2 = transform.inv(z)
     # print(loss(x, x2))
@@ -222,8 +222,8 @@ if __name__ == "__main__":
         batch_size=1, shuffle=False, num_workers=0)
 
     for d in dataloader:
-        x = d['A'] * 0.99
-        z = transform(x) * 0.99
+        x = d['A'] # * 0.99
+        z = transform(x) # * 0.99
         # z = torch.max(z, torch.Tensor(np.array(0.99)))
         # z = torch.min(z, torch.Tensor(np.array(-0.99)))
         x2 = transform.inv(z)

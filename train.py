@@ -72,7 +72,7 @@ criterion_identity = torch.nn.L1Loss()
 
 # Optimizers & LR schedulers
 optimizer_G = torch.optim.Adam(generator.parameters(),
-                               lr=opt.g_lr, #betas=(0.5, 0.999),
+                               lr=opt.g_lr, betas=(0.5, 0.999),
                                weight_decay=1e-3)
 optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=opt.d_lr, betas=(0.5, 0.999))
 optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=opt.d_lr, betas=(0.5, 0.999))
@@ -133,10 +133,10 @@ try:
 
             # Identity loss
             # G_A2B(B) should equal B if real B is fed
-            same_B = generator.transform(real_B) * opt.identity_weight
+            same_B = generator.transform(real_B) * opt.scale_pixels
             loss_identity_B = criterion_identity(same_B, real_B) * opt.identity_weight
             # G_B2A(A) should equal A if real A is fed
-            same_A = generator.transform.inv(real_A) * opt.identity_weight
+            same_A = generator.transform.inv(real_A) * opt.scale_pixels
             loss_identity_A = criterion_identity(same_A, real_A) * opt.identity_weight
 
             # GAN loss
@@ -149,10 +149,10 @@ try:
             loss_GAN_B2A = criterion_GAN(pred_fake, target_real)
 
             # Cycle loss
-            recovered_A = generator.transform.inv(fake_B) * opt.identity_weight
+            recovered_A = generator.transform.inv(fake_B) * opt.scale_pixels
             loss_cycle_ABA = criterion_cycle(recovered_A, real_A) * opt.cycle_weight
 
-            recovered_B = generator.transform(fake_A) * opt.identity_weight
+            recovered_B = generator.transform(fake_A) * opt.scale_pixels
             loss_cycle_BAB = criterion_cycle(recovered_B, real_B)  * opt.cycle_weight
             cycle_loss = loss_cycle_ABA + loss_cycle_BAB
 
@@ -209,10 +209,9 @@ try:
             ###################################
 
             # Progress report (http://localhost:8097)
-            if i % 10 == 0:
-                logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-                            'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
-                            images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
+            logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
+                        'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)},
+                        images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
 
         # Update learning rates
         lr_scheduler_G.step()
